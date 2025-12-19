@@ -1,4 +1,3 @@
-import fs from "fs";
 import { createRequire } from "module";
 import Analysis from "../models/Analysis.js";
 import extractSkills from "../utils/extractSkills.js";
@@ -19,11 +18,10 @@ const uploadResume = async (req, res) => {
       });
     }
 
-    /* ---------- 1️⃣ Read PDF ---------- */
-    const pdfBuffer = fs.readFileSync(req.file.path);
-    const pdfData = await pdfParse(pdfBuffer);
+    /* ---------- 1️⃣ Read PDF (RENDER SAFE) ---------- */
+    const pdfData = await pdfParse(req.file.buffer);
 
-    const resumeText = pdfData.text;
+    const resumeText = pdfData.text || "";
     const jobDescription = req.body.jobDescription;
 
     /* ---------- 2️⃣ Extract skills ---------- */
@@ -44,7 +42,9 @@ const uploadResume = async (req, res) => {
       ? Math.round((matchedSkills.length / jdSkills.length) * 100)
       : 0;
 
-    /* ---------- 5️⃣ Python ML call ---------- */
+    /* ---------- 5️⃣ Call Python ML Service ---------- */
+    console.log("ML_SERVICE_URL =", process.env.ML_SERVICE_URL);
+
     const mlResponse = await axios.post(
       `${process.env.ML_SERVICE_URL}/analyze`,
       {
@@ -53,7 +53,7 @@ const uploadResume = async (req, res) => {
       }
     );
 
-    const mlMatchPercentage = mlResponse.data.matchPercentage;
+    const mlMatchPercentage = mlResponse.data.matchPercentage || 0;
 
     /* ---------- 6️⃣ Final hybrid score ---------- */
     const finalMatchPercentage = Math.round(
@@ -71,10 +71,7 @@ const uploadResume = async (req, res) => {
       matchPercentage: finalMatchPercentage,
     });
 
-    /* ---------- 8️⃣ Delete uploaded PDF ---------- */
-    fs.unlinkSync(req.file.path);
-
-    /* ---------- 9️⃣ Groq AI Suggestions ---------- */
+    /* ---------- 8️⃣ Groq AI Suggestions ---------- */
     let aiSuggestions = {};
     try {
       aiSuggestions = await generateGroqSuggestions({
@@ -83,16 +80,11 @@ const uploadResume = async (req, res) => {
         finalMatchPercentage,
         jobDescription,
       });
-
-      // 🔍 DEBUG (safe to remove later)
-      console.log("===== AI SENT TO FRONTEND =====");
-      console.log(aiSuggestions);
-      console.log("==============================");
     } catch (err) {
       console.error("Groq AI error:", err.message);
     }
 
-    /* ---------- 🔟 Send response ---------- */
+    /* ---------- 9️⃣ Send response ---------- */
     return res.status(201).json({
       message: "Analysis completed successfully 🎉",
       result: {
@@ -103,7 +95,7 @@ const uploadResume = async (req, res) => {
         skillMatchPercentage,
         mlMatchPercentage,
         finalMatchPercentage,
-        aiSuggestions, // always an object
+        aiSuggestions,
       },
       id: analysis._id,
     });
