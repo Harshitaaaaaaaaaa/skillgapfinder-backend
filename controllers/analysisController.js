@@ -45,10 +45,13 @@ const uploadResume = async (req, res) => {
       : 0;
 
     /* ---------- 5️⃣ Python ML call ---------- */
-    const mlResponse = await axios.post("http://127.0.0.1:8000/analyze", {
-      resumeText,
-      jobDescription,
-    });
+    const mlResponse = await axios.post(
+      `${process.env.ML_SERVICE_URL}/analyze`,
+      {
+        resumeText,
+        jobDescription,
+      }
+    );
 
     const mlMatchPercentage = mlResponse.data.matchPercentage;
 
